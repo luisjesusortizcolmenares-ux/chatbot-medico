@@ -1,12 +1,13 @@
 from flask import Flask, request
 from google import genai
 import db_helper
+import os
 
 app = Flask(__name__)
 
-# CONFIGURACIÓN DE GEMINI
-# Pon tu clave real aquí adentro manteniendo las comillas
-GEMINI_API_KEY = "AIzaSyAP_3-mwCYV8z7HEvtCGQJfwDbQCZ3AkdM"
+# CONFIGURACIÓN DE GEMINI SEGURA
+# Ahora lee la clave de forma oculta desde el entorno seguro de Render
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 @app.route("/webhook", methods=["POST"])
@@ -56,7 +57,7 @@ def webhook():
         print(f"[ERROR GEMINI] {e}")
         respuesta_bot = "Lo siento, estoy experimentando un problema técnico temporal. Por favor, intenta de nuevo en unos minutos."
 
-    # Imprimimos en la consola de Windows para monitorear en vivo
+    # Imprimimos en la consola para monitorear en vivo
     print(f"\n[WHATSAPP] De: {telefono_usuario} -> {mensaje_recibido}")
     print(f"[GEMINI] -> {respuesta_bot}\n")
     
