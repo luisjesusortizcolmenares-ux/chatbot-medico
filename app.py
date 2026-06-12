@@ -4,9 +4,6 @@ import db_helper
 import os
 
 app = Flask(__name__)
-
-# CONFIGURACIÓN DE GEMINI SEGURA
-# Ahora lee la clave de forma oculta desde el entorno seguro de Render
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -19,55 +16,33 @@ def webhook():
     if not telefono_usuario or not mensaje_recibido:
         return "OK", 200
 
-    # 1. Revisar si el paciente existe en la base de datos
+    # 1. Buscamos al paciente directamente
     paciente = db_helper.obtener_paciente(telefono_usuario)
     
-    # 2. Crear el contexto médico para la IA según el estado del paciente
-    if paciente is not None:
-        nombre = paciente[1]
-        edad = paciente[2]
-        condiciones = paciente[3]
-        
-        # Paciente registrado: Evaluamos su reporte diario con telemedicina preventiva
-        prompt = f"""
-        Eres un asistente médico experto en medicina preventiva y telemedicina.
-        Estás hablando con tu paciente {nombre}, de {edad} años, quien padece de: {condiciones}.
-        
-        Él te acaba de reportar lo siguiente sobre su día: "{mensaje_recibido}".
-        
-        Analiza su mensaje textualmente. Si lo que comió, hizo o siente pone en riesgo su salud debido a sus condiciones preexistentes, genera una alerta médica preventiva sutil. Dale consejos amables y profesionales basados en sus hábitos. Sé breve, empático y directo (máximo 3 párrafos).
-        """
+    # 2. LÓGICA DE REGISTRO
+    # Si paciente es None, significa que es la primera vez que escribe
+    if paciente is None:
+        if "nombre" in mensaje_recibido.lower() and "edad" in mensaje_recibido.lower():
+            # Extraemos los datos usando Gemini
+            prompt_extraer = f"Extrae: Nombre, Edad, Condiciones del mensaje: '{mensaje_recibido}'. Formato: Nombre|Edad|Condiciones"
+            res_ia = client.models.generate_content(model='gemini-2.0-flash', contents=prompt_extraer).text
+            try:
+                nombre, edad, cond = res_ia.split('|')
+                db_helper.registrar_paciente(telefono_usuario, nombre.strip(), int(edad), cond.strip())
+                respuesta_bot = f"¡Muchas gracias, {nombre.strip()}! Expediente registrado. ¿Cómo te sientes hoy?"
+            except:
+                respuesta_bot = "No logré registrarte. Por favor escribe: Mi nombre es [NOMBRE], tengo [EDAD] años y sufro de [CONDICIONES]."
+        else:
+            respuesta_bot = "¡Hola! Para abrir tu expediente médico, por favor dime: Mi nombre es [NOMBRE], tengo [EDAD] años y sufro de [CONDICIONES]."
+    
+    # 3. LÓGICA DE PACIENTE REGISTRADO
     else:
-        # Paciente nuevo: La IA interactúa para registrarlo de forma conversacional
-        prompt = f"""
-        Eres un asistente médico automatizado de una clínica preventiva.
-        Un nuevo paciente te escribe por primera vez y te dice: "{mensaje_recibido}".
-        
-        Salúdalo cordialmente y pídele de forma amigable sus datos básicos para abrir su expediente: su Nombre completo, Edad y si sufre de alguna enfermedad crónica (como hipertensión, diabetes, etc.). Sé muy educado y breve.
-        """
-
-    try:
-        # 3. Llamada oficial a Gemini (Usando el modelo gratuito gemini-2.5-flash)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-        )
+        nombre, edad, condiciones = paciente[1], paciente[2], paciente[3]
+        prompt = f"Eres un médico experto. Estás hablando con {nombre}, de {edad} años, quien padece de: {condiciones}. Mensaje recibido: '{mensaje_recibido}'. Analiza su estado y da consejos breves y empáticos."
+        response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
         respuesta_bot = response.text
-    except Exception as e:
-        print(f"[ERROR GEMINI] {e}")
-        respuesta_bot = "Lo siento, estoy experimentando un problema técnico temporal. Por favor, intenta de nuevo en unos minutos."
 
-    # Imprimimos en la consola para monitorear en vivo
-    print(f"\n[WHATSAPP] De: {telefono_usuario} -> {mensaje_recibido}")
-    print(f"[GEMINI] -> {respuesta_bot}\n")
-    
-    # Formateamos la respuesta para Twilio/WhatsApp
-    respuesta_twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-    <Response>
-        <Message>{respuesta_bot}</Message>
-    </Response>"""
-    
-    return respuesta_twiml, 200, {"Content-Type": "text/xml"}
+    return f"<?xml version='1.0' encoding='UTF-8'?><Response><Message>{respuesta_bot}</Message></Response>", 200, {"Content-Type": "text/xml"}
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    app.run(port=5000)
