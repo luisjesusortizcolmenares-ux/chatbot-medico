@@ -14,7 +14,7 @@ def obtener_respuesta_gemini(prompt):
     try:
         # Usamos el modelo 2.0-flash que es el que soporta la nueva librería genai
         response = client.models.generate_content(
-            model='gemini-2.0-flash', 
+            model='gemini-2.5-flash', 
             contents=prompt
         )
         return response.text
