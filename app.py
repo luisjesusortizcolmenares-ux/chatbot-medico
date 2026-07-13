@@ -12,9 +12,9 @@ client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 # Función para obtener respuesta de Gemini
 def obtener_respuesta_gemini(prompt):
     try:
-        # Usamos el modelo 2.0-flash que es el que soporta la nueva librería genai
+        # Usamos gemini-1.5-flash para máxima estabilidad
         response = client.models.generate_content(
-            model='gemini-2.5-flash', 
+            model='gemini-1.5-flash', 
             contents=prompt
         )
         return response.text
@@ -36,12 +36,14 @@ def webhook():
     paciente = db_helper.obtener_paciente(telefono_usuario)
     
     if paciente is None:
-        # Prompt inicial de registro
+        # Prompt inicial de registro mejorado para ser cálido y empático
         prompt_inicial = f"""
-        Eres un asistente médico inteligente. El usuario envió: '{mensaje_recibido}'.
-        Si el usuario quiere registrarse, busca su nombre, edad y condiciones médicas. 
-        Si los encuentras, responde exactamente con este formato: REGISTRO|Nombre|Edad|Condiciones.
-        Si no quiere registrarse o hace una pregunta médica, responde normalmente de forma empática.
+        Eres BioVision, un asistente médico virtual sumamente cálido, empático y muy humano.
+        Un usuario nuevo te acaba de enviar este mensaje: '{mensaje_recibido}'.
+
+        Tu objetivo es registrar al paciente. Actúa según estas dos reglas:
+        1. Si en su mensaje ya te está dando su nombre, edad y condiciones médicas, no saludes, responde ÚNICAMENTE con este formato exacto: REGISTRO|Nombre|Edad|Condiciones. (Ejemplo: REGISTRO|Carlos|45|Hipertensión).
+        2. Si el mensaje es un simple saludo, una pregunta general, o faltan datos para el registro, dale una bienvenida hermosa y muy amigable. Preséntate como BioVision, dile que estás feliz de atenderle hoy, y explícale que para darle una mejor atención necesitas abrir su expediente. Pregúntale con mucho tacto y amabilidad cuál es su nombre, su edad y si padece de alguna condición médica. Usa emojis para que se sienta cercano.
         """
         res_ia = obtener_respuesta_gemini(prompt_inicial)
         
@@ -49,9 +51,9 @@ def webhook():
             try:
                 partes = res_ia.split('|')
                 db_helper.registrar_paciente(telefono_usuario, partes[1].strip(), int(partes[2]), partes[3].strip())
-                respuesta_bot = f"¡Bienvenido {partes[1].strip()}! Ya tienes tu expediente. ¿En qué más puedo ayudarte hoy?"
+                respuesta_bot = f"¡Listo, {partes[1].strip()}! 📝 Ya he creado tu expediente de forma segura. Cuéntame, ¿en qué te puedo ayudar el día de hoy?"
             except:
-                respuesta_bot = "No pude registrarte. Por favor, escribe: Mi nombre es [NOMBRE], tengo [EDAD] años y sufro de [CONDICIONES]."
+                respuesta_bot = "¡Ups! Tuvimos un pequeño inconveniente guardando tus datos. ¿Podrías repetirme tu nombre, tu edad y si tienes alguna condición médica, por favor? 🙏"
         else:
             respuesta_bot = res_ia
     else:
