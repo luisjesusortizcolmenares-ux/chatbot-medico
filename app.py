@@ -1,29 +1,26 @@
+import os
 from flask import Flask, request
 from google import genai
-from google.genai import errors
 import db_helper
-import os
 
-# 1. Definición de la aplicación (ESTO DEBE IR PRIMERO)
+# Inicialización de la aplicación
 app = Flask(__name__)
 
-# 2. Configuración
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Configuración del cliente Gemini
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-# Función auxiliar para llamar a Gemini
+# Función para obtener respuesta de Gemini
 def obtener_respuesta_gemini(prompt):
     try:
-        response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
+        # Usamos 1.5-flash por ser el modelo más estable para el plan gratuito
+        response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
         return response.text
-    except errors.ClientError as e:
-        if e.code == 429:
-            return "Lo siento, ahora mismo tengo mucha demanda. Intenta en unos minutos."
-        return f"Ocurrió un error técnico: {e.message}"
     except Exception as e:
-        return "Hubo un error inesperado al procesar tu solicitud."
+        # Esto imprimirá el error real en los logs de Render para que podamos diagnosticar
+        print(f"--- ERROR REAL: {str(e)} ---")
+        return f"Error técnico: {str(e)}"
 
-# 3. RUTAS (Aquí abajo, después de definir app)
+# Ruta del Webhook
 @app.route("/webhook", methods=["POST"])
 def webhook():
     datos = request.form
@@ -36,6 +33,7 @@ def webhook():
     paciente = db_helper.obtener_paciente(telefono_usuario)
     
     if paciente is None:
+        # Prompt inicial de registro
         prompt_inicial = f"""
         Eres un asistente médico inteligente. El usuario envió: '{mensaje_recibido}'.
         Si el usuario quiere registrarse, busca su nombre, edad y condiciones médicas. 
@@ -54,6 +52,7 @@ def webhook():
         else:
             respuesta_bot = res_ia
     else:
+        # Interacción para paciente registrado
         nombre, edad, condiciones = paciente[1], paciente[2], paciente[3]
         prompt = f"""
         Eres un médico experto conversando con {nombre}, de {edad} años, quien padece de: {condiciones}.
@@ -64,7 +63,7 @@ def webhook():
 
     return f"<?xml version='1.0' encoding='UTF-8'?><Response><Message>{respuesta_bot}</Message></Response>", 200, {"Content-Type": "text/xml"}
 
-# 4. PUNTO DE ENTRADA (Vital para Render)
+# Punto de entrada para Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
