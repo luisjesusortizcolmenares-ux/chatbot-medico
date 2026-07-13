@@ -12,12 +12,15 @@ client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 # Función para obtener respuesta de Gemini
 def obtener_respuesta_gemini(prompt):
     try:
-        # Usamos 1.5-flash por ser el modelo más estable para el plan gratuito
-        response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
+        # Usamos el modelo 2.0-flash que es el que soporta la nueva librería genai
+        response = client.models.generate_content(
+            model='gemini-2.0-flash', 
+            contents=prompt
+        )
         return response.text
     except Exception as e:
-        # Esto imprimirá el error real en los logs de Render para que podamos diagnosticar
-        print(f"--- ERROR REAL: {str(e)} ---")
+        # Esto imprimirá el error real en los logs de Render si algo más falla
+        print(f"--- ERROR REAL DE API: {str(e)} ---")
         return f"Error técnico: {str(e)}"
 
 # Ruta del Webhook
